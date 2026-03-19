@@ -26,12 +26,14 @@ function GameRow({ rank, name, icon, right, onClick }: {
       onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#222"; e.currentTarget.style.transform = "scale(1)"; }}
     >
       <span style={{ color: "#00FF41", fontWeight: 800, fontSize: "0.9rem", width: "24px", flexShrink: 0, textAlign: "center" }}>{rank}</span>
-      <img
-        src={icon}
-        alt={name}
-        style={{ width: "80px", height: "37px", objectFit: "cover", borderRadius: "3px", flexShrink: 0 }}
-        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-      />
+      {icon && (
+        <img
+          src={icon}
+          alt={name}
+          style={{ width: "80px", height: "37px", objectFit: "cover", borderRadius: "3px", flexShrink: 0 }}
+          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+        />
+      )}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: "0.82rem", color: "#fff", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {name}
@@ -152,39 +154,25 @@ export default function Home() {
 
   useEffect(() => {
     fetch("/api/trending").then((r) => r.json()).then((data) => setTrending(Array.isArray(data) ? data : []));
-  }, []);
-
-  useEffect(() => {
-    const saved = localStorage.getItem("searchRanking");
-    if (saved) setSearchRanking(JSON.parse(saved));
+    fetch("/api/ranking").then((r) => r.json()).then((data) => setSearchRanking(Array.isArray(data) ? data : []));
   }, []);
 
   const handleSelect = (appid: number, name: string) => {
     setSelectedAppid(appid);
 
-    // まず先にランキングをappid/nameで更新
-    setSearchRanking((prev) => {
-      const existing = prev.find((g) => g.appid === appid);
-      const filtered = prev.filter((g) => g.appid !== appid);
-      const updated = [
-        { appid, name, icon: existing?.icon || "", count: (existing?.count || 0) + 1 },
-        ...filtered,
-      ].sort((a, b) => b.count - a.count).slice(0, 10);
-      localStorage.setItem("searchRanking", JSON.stringify(updated));
-      return updated;
-    });
-
-    // iconを非同期で取得して更新
+    // ゲームデータ取得してアイコンも一緒にランキングに保存
     fetch(`/api/game?appid=${appid}&lang=${lang}`)
       .then((r) => r.json())
       .then((data) => {
-        if (!data.headerImage) return;
-        setSearchRanking((prev) => {
-          const updated = prev.map((g) =>
-            g.appid === appid ? { ...g, icon: data.headerImage } : g
-          );
-          localStorage.setItem("searchRanking", JSON.stringify(updated));
-          return updated;
+        const icon = data.headerImage || "";
+        // サーバーサイドランキングに記録
+        fetch("/api/ranking", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ appid, name, icon }),
+        }).then(() => {
+          // ランキング再取得
+          fetch("/api/ranking").then((r) => r.json()).then((d) => setSearchRanking(Array.isArray(d) ? d : []));
         });
       });
   };
@@ -210,8 +198,6 @@ export default function Home() {
           <SearchBar lang={lang} onSelect={handleSelect} />
 
           <div style={{ width: "100%", maxWidth: "1400px", display: "grid", gridTemplateColumns: "280px 1fr 1fr 280px", gap: "1rem", marginTop: "0.5rem", alignItems: "start" }}>
-
-            {/* 検索ランキング */}
             <div className="card" style={{ padding: "1rem" }}>
               <SectionTitle text={`🔥 ${lang === "ja" ? "検索ランキング" : "Search Ranking"}`} />
               {searchRanking.length === 0 ? (
@@ -225,19 +211,16 @@ export default function Home() {
               )}
             </div>
 
-            {/* アクティブユーザーランキング */}
             <div className="card" style={{ padding: "1rem" }}>
               <SectionTitle text={`👥 ${lang === "ja" ? "アクティブユーザーランキング" : "Active Players"}`} />
               <ActivePlayersList lang={lang} onSelect={handleSelect} />
             </div>
 
-            {/* セール中タイトル */}
             <div className="card" style={{ padding: "1rem" }}>
               <SectionTitle text={`🔥 ${lang === "ja" ? "セール中タイトル" : "Games on Sale"}`} />
               <SalesList lang={lang} onSelect={handleSelect} />
             </div>
 
-            {/* Steam売上トップ */}
             <div className="card" style={{ padding: "1rem" }}>
               <SectionTitle text={`📈 ${lang === "ja" ? "Steam売上トップ" : "Steam Top Sellers"}`} />
               {trending.length === 0 ? (
