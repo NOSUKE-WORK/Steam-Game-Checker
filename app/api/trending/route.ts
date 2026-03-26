@@ -1,12 +1,13 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 const cache = new Map<string, { data: any; timestamp: number }>();
 const CACHE_DURATION = 24 * 60 * 60 * 1000;
 
-async function getAppDetail(appid: number): Promise<{ name: string; icon: string; isValid: boolean }> {
+async function getAppDetail(appid: number, lang: string): Promise<{ name: string; icon: string; isValid: boolean }> {
   try {
+    const l = lang === "en" ? "english" : "japanese";
     const res = await fetch(
-      `https://store.steampowered.com/api/appdetails?appids=${appid}&filters=basic`,
+      `https://store.steampowered.com/api/appdetails?appids=${appid}&filters=basic&l=${l}`,
       { headers: { "User-Agent": "Mozilla/5.0" } }
     );
     const text = await res.text();
@@ -28,14 +29,17 @@ async function getAppDetail(appid: number): Promise<{ name: string; icon: string
   }
 }
 
-export async function GET() {
-  const cached = cache.get("trending");
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const lang = searchParams.get("lang") || "ja";
+  const cacheKey = `trending-${lang}`;
+
+  const cached = cache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
     return NextResponse.json(cached.data);
   }
 
   try {
-    // Steam売上トップをより多く取得できるエンドポイント
     const res = await fetch(
       "https://store.steampowered.com/api/featuredcategories/?cc=JP&l=japanese",
       { headers: { "User-Agent": "Mozilla/5.0" } }
@@ -44,13 +48,10 @@ export async function GET() {
     if (text.trim().startsWith("<")) throw new Error("HTML");
 
     const data = JSON.parse(text);
-
-    // top_sellersとnew_releasesを合わせて候補を増やす
     const topSellers = data?.top_sellers?.items || [];
     const newReleases = data?.new_releases?.items || [];
     const specials = data?.specials?.items || [];
 
-    // 重複を除いて結合
     const seen = new Set<number>();
     const candidates: any[] = [];
     for (const item of [...topSellers, ...newReleases, ...specials]) {
@@ -60,23 +61,19 @@ export async function GET() {
       }
     }
 
-    console.log("candidates count:", candidates.length);
-
     const results = [];
     for (const item of candidates) {
       if (results.length >= 10) break;
-      const detail = await getAppDetail(item.id);
+      const detail = await getAppDetail(item.id, lang);
       if (detail.isValid && detail.name && detail.icon) {
         results.push({ appid: item.id, name: detail.name, icon: detail.icon });
       }
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
 
-    console.log("trending results:", results.length);
-    cache.set("trending", { data: results, timestamp: Date.now() });
+    cache.set(cacheKey, { data: results, timestamp: Date.now() });
     return NextResponse.json(results);
-  } catch (e) {
-    console.log("Trending fetch failed:", e);
+  } catch {
     return NextResponse.json([]);
   }
 }

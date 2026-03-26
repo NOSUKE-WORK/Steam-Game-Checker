@@ -78,8 +78,8 @@ function SidebarRow({ rank, name, icon, onClick }: {
 function ActivePlayersList({ lang, onSelect }: { lang: "ja" | "en"; onSelect: (appid: number, name: string) => void }) {
   const [activePlayers, setActivePlayers] = useState<ActivePlayer[]>([]);
   useEffect(() => {
-    fetch("/api/activeplayers").then((r) => r.json()).then((d) => setActivePlayers(Array.isArray(d) ? d : []));
-  }, []);
+    fetch(`/api/activeplayers?lang=${lang}`).then((r) => r.json()).then((d) => setActivePlayers(Array.isArray(d) ? d : []));
+  }, [lang]);
 
   if (activePlayers.length === 0) return <div style={{ color: "#555", fontSize: "0.8rem" }}>{lang === "ja" ? "読み込み中..." : "Loading..."}</div>;
 
@@ -99,8 +99,8 @@ function ActivePlayersList({ lang, onSelect }: { lang: "ja" | "en"; onSelect: (a
 function SalesList({ lang, onSelect }: { lang: "ja" | "en"; onSelect: (appid: number, name: string) => void }) {
   const [sales, setSales] = useState<SaleItem[]>([]);
   useEffect(() => {
-    fetch("/api/sales").then((r) => r.json()).then((d) => setSales(Array.isArray(d) ? d : []));
-  }, []);
+    fetch(`/api/sales?lang=${lang}`).then((r) => r.json()).then((d) => setSales(Array.isArray(d) ? d : []));
+  }, [lang]);
 
   if (sales.length === 0) return <div style={{ color: "#555", fontSize: "0.8rem" }}>{lang === "ja" ? "読み込み中..." : "Loading..."}</div>;
 
@@ -153,25 +153,22 @@ export default function Home() {
   const [searchRanking, setSearchRanking] = useState<RankingItem[]>([]);
 
   useEffect(() => {
-    fetch("/api/trending").then((r) => r.json()).then((data) => setTrending(Array.isArray(data) ? data : []));
+    fetch(`/api/trending?lang=${lang}`).then((r) => r.json()).then((data) => setTrending(Array.isArray(data) ? data : []));
     fetch("/api/ranking").then((r) => r.json()).then((data) => setSearchRanking(Array.isArray(data) ? data : []));
-  }, []);
+  }, [lang]);
 
   const handleSelect = (appid: number, name: string) => {
     setSelectedAppid(appid);
 
-    // ゲームデータ取得してアイコンも一緒にランキングに保存
     fetch(`/api/game?appid=${appid}&lang=${lang}`)
       .then((r) => r.json())
       .then((data) => {
         const icon = data.headerImage || "";
-        // サーバーサイドランキングに記録
         fetch("/api/ranking", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ appid, name, icon }),
         }).then(() => {
-          // ランキング再取得
           fetch("/api/ranking").then((r) => r.json()).then((d) => setSearchRanking(Array.isArray(d) ? d : []));
         });
       });
@@ -212,7 +209,7 @@ export default function Home() {
             </div>
 
             <div className="card" style={{ padding: "1rem" }}>
-              <SectionTitle text={`👥 ${lang === "ja" ? "アクティブユーザーランキング" : "Active Players"}`} />
+              <SectionTitle text={`👥 ${lang === "ja" ? "アクティブユーザーランキング" : "Active Players Ranking"}`} />
               <ActivePlayersList lang={lang} onSelect={handleSelect} />
             </div>
 
